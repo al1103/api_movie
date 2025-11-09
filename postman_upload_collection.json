@@ -1,0 +1,182 @@
+{
+  "info": {
+    "_postman_id": "api-movie-upload",
+    "name": "API Movie - Upload Image & Video",
+    "description": "Simple image and video upload endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Upload Image",
+      "item": [
+        {
+          "name": "Upload Image to Cloudinary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('image_url', jsonData.data.url);",
+                  "    pm.test(\"Image uploaded successfully\", function () {",
+                  "        pm.expect(jsonData.success).to.equal(true);",
+                  "        pm.expect(jsonData.data.url).to.include('cloudinary');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": "/path/to/your/image.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upload/image",
+              "host": ["{{baseUrl}}"],
+              "path": ["upload", "image"]
+            },
+            "description": "Upload a single image file and get back the URL"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload Video",
+      "item": [
+        {
+          "name": "Upload Video to Cloudinary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('video_url', jsonData.data.url);",
+                  "    pm.test(\"Video uploaded successfully\", function () {",
+                  "        pm.expect(jsonData.success).to.equal(true);",
+                  "        pm.expect(jsonData.data.url).to.include('cloudinary');",
+                  "        pm.expect(jsonData.data.duration).to.be.a('number');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "video",
+                  "type": "file",
+                  "src": "/path/to/your/video.mp4"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upload/video",
+              "host": ["{{baseUrl}}"],
+              "path": ["upload", "video"]
+            },
+            "description": "Upload a video file and get back the URL with duration"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usage Examples",
+      "item": [
+        {
+          "name": "Create Movie with Uploaded Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Example Movie\",\n  \"description\": \"Movie description here\",\n  \"posterUrl\": \"{{image_url}}\",\n  \"genres\": [\"action\", \"adventure\"],\n  \"countries\": [\"united-states\"],\n  \"year\": 2024,\n  \"duration\": 120\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/movies/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["movies", "upload"]
+            },
+            "description": "Create a new movie using the uploaded image URL"
+          }
+        },
+        {
+          "name": "Create Movie with Uploaded Video",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Example Movie with Video\",\n  \"description\": \"Movie with uploaded video\",\n  \"posterUrl\": \"https://via.placeholder.com/300x450\",\n  \"videoUrl\": \"{{video_url}}\",\n  \"genres\": [\"drama\"],\n  \"countries\": [\"united-states\"],\n  \"year\": 2024,\n  \"duration\": 120\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/movies/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["movies", "upload"]
+            },
+            "description": "Create a movie using the uploaded video URL"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "image_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "video_url",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

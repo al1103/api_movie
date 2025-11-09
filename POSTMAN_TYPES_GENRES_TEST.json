@@ -1,0 +1,214 @@
+{
+  "info": {
+    "name": "Movie API - Types & Genres Validation Test",
+    "description": "Test API with dynamic type and genre validation from database",
+    "version": "1.0.0",
+    "timestamp": "2025-11-09T00:00:00Z"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var jsonData = pm.response.json();",
+                  "  pm.environment.set(\"token\", jsonData.token);",
+                  "  console.log(\"✅ Token saved:\", jsonData.token.substring(0, 20) + \"...\");",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Get Data",
+      "item": [
+        {
+          "name": "Get All Genres",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/genres",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "genres"]
+            }
+          }
+        },
+        {
+          "name": "Get Movie Types",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/movietypes",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "movietypes"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload Movie",
+      "item": [
+        {
+          "name": "✅ Valid Movie (series)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Avengers Series\",\n  \"origin_name\": \"The Avengers\",\n  \"slug\": \"avengers-series-{{$timestamp}}\",\n  \"type\": \"series\",\n  \"status\": \"ongoing\",\n  \"year\": 2024,\n  \"time\": \"45 min/tập\",\n  \"content\": \"Bộ phim về đội Avengers\",\n  \"lang\": \"en\",\n  \"quality\": \"720p\",\n  \"actor\": [\"Robert Downey Jr.\", \"Chris Evans\"],\n  \"director\": [\"Joss Whedon\"],\n  \"category\": [\n    {\n      \"name\": \"Action\",\n      \"slug\": \"action\"\n    },\n    {\n      \"name\": \"Adventure\",\n      \"slug\": \"adventure\"\n    }\n  ],\n  \"country\": [\n    {\n      \"name\": \"USA\",\n      \"slug\": \"usa\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/movies/upload",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "movies", "upload"]
+            }
+          }
+        },
+        {
+          "name": "✅ Valid Movie (single)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"The Matrix\",\n  \"slug\": \"the-matrix-{{$timestamp}}\",\n  \"type\": \"single\",\n  \"year\": 1999,\n  \"content\": \"Phim lẻ nổi tiếng\",\n  \"actor\": [\"Keanu Reeves\"],\n  \"director\": [\"Wachowski\"],\n  \"category\": [\n    {\n      \"name\": \"Sci-Fi\",\n      \"slug\": \"sci-fi\"\n    },\n    {\n      \"name\": \"Action\",\n      \"slug\": \"action\"\n    }\n  ],\n  \"country\": [\n    {\n      \"name\": \"USA\",\n      \"slug\": \"usa\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/movies/upload",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "movies", "upload"]
+            }
+          }
+        },
+        {
+          "name": "❌ Invalid Type (should fail)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Movie\",\n  \"slug\": \"test-movie-invalid-type-{{$timestamp}}\",\n  \"type\": \"invalid-type\",\n  \"year\": 2024,\n  \"category\": [\n    {\n      \"name\": \"Action\",\n      \"slug\": \"action\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/movies/upload",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "movies", "upload"]
+            }
+          }
+        },
+        {
+          "name": "❌ Invalid Genre (should fail)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Movie\",\n  \"slug\": \"test-movie-invalid-genre-{{$timestamp}}\",\n  \"type\": \"series\",\n  \"year\": 2024,\n  \"category\": [\n    {\n      \"name\": \"Unknown Genre\",\n      \"slug\": \"unknown-genre-xyz\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/movies/upload",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "movies", "upload"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Movie Details",
+      "item": [
+        {
+          "name": "Get Movie by Slug",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/movies/:slug",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "movies", ":slug"],
+              "variable": [
+                {
+                  "key": "slug",
+                  "value": "avengers-series"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
