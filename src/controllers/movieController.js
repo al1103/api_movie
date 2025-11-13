@@ -1,4 +1,5 @@
 const Joi = require("joi");
+const mongoose = require("mongoose");
 const Movie = require("../models/Movie");
 const Genre = require("../models/Genre");
 const Country = require("../models/Country");
@@ -54,8 +55,18 @@ async function handleLatestMovies(req, res, next) {
 
 async function handleMovieDetails(req, res, next) {
   try {
-    const { slug } = req.params;
-    const movie = await Movie.findOne({ slug });
+    const { movieIdOrSlug } = req.params;
+    let movie = null;
+
+    // Try to find by ObjectId first (if it's a valid MongoDB ID)
+    if (mongoose.Types.ObjectId.isValid(movieIdOrSlug)) {
+      movie = await Movie.findById(movieIdOrSlug);
+    }
+
+    // If not found and it's not a valid ObjectId, or if it's a valid ObjectId but movie not found, try slug
+    if (!movie) {
+      movie = await Movie.findOne({ slug: movieIdOrSlug });
+    }
 
     if (!movie) {
       return res.status(404).json({ error: "Movie not found" });
@@ -232,6 +243,173 @@ async function handleGenreDetail(req, res, next) {
   }
 }
 
+async function handleMoviesByGenreId(req, res, next) {
+  try {
+    const { genreId } = req.params;
+    const { page, limit } = await paginationSchema.validateAsync(req.query, {
+      convert: true,
+      allowUnknown: true,
+      stripUnknown: true,
+    });
+
+    const skip = (page - 1) * (limit || 10);
+    const queryLimit = limit || 10;
+
+    // Check if genre ID exists
+    const genre = await Genre.findById(genreId);
+    if (!genre) {
+      return res.status(404).json({ error: "Genre not found" });
+    }
+
+    // Query: Tìm theo category._id hoặc category.slug (để support cả 2 format)
+    const query = {
+      $or: [{ "category._id": genreId }, { "category.slug": genre.slug }],
+    };
+
+    const [movies, total] = await Promise.all([
+      Movie.find(query).sort({ updatedAt: -1 }).skip(skip).limit(queryLimit),
+      Movie.countDocuments(query),
+    ]);
+
+    res.json({
+      items: movies,
+      genre: {
+        _id: genre._id,
+        name: genre.name,
+        slug: genre.slug,
+      },
+      pagination: {
+        page,
+        limit: queryLimit,
+        total,
+        total_page: Math.ceil(total / queryLimit),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Genre CRUD Operations
+
+async function handleCreateGenre(req, res, next) {
+  try {
+    const schema = Joi.object({
+      name: Joi.string().trim().required(),
+      slug: Joi.string().trim().required(),
+    });
+
+    const genreData = await schema.validateAsync(req.body);
+
+    // Check if slug already exists
+    const existingGenre = await Genre.findOne({ slug: genreData.slug });
+    if (existingGenre) {
+      return res.status(400).json({ error: "Slug already exists" });
+    }
+
+    const genre = new Genre(genreData);
+    await genre.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Genre created successfully",
+      genre,
+    });
+  } catch (error) {
+    if (error.details) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+    next(error);
+  }
+}
+
+async function handleUpdateGenre(req, res, next) {
+  try {
+    const { genreId } = req.params;
+
+    // Validate if genreId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(genreId)) {
+      return res.status(400).json({ error: "Invalid genre ID format" });
+    }
+
+    const schema = Joi.object({
+      name: Joi.string().trim(),
+      slug: Joi.string().trim(),
+    });
+
+    const genreData = await schema.validateAsync(req.body);
+
+    // Find genre by ID
+    const genre = await Genre.findById(genreId);
+    if (!genre) {
+      return res.status(404).json({ error: "Genre not found" });
+    }
+
+    // If new slug is being updated, check uniqueness
+    if (genreData.slug && genreData.slug !== genre.slug) {
+      const existingGenre = await Genre.findOne({ slug: genreData.slug });
+      if (existingGenre) {
+        return res.status(400).json({ error: "Slug already exists" });
+      }
+    }
+
+    const updatedGenre = await Genre.findByIdAndUpdate(
+      genreId,
+      { ...genreData, updatedAt: new Date() },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedGenre) {
+      return res.status(404).json({ error: "Genre not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Genre updated successfully",
+      genre: updatedGenre,
+    });
+  } catch (error) {
+    if (error.details) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+    next(error);
+  }
+}
+
+async function handleDeleteGenre(req, res, next) {
+  try {
+    const { genreId } = req.params;
+
+    // Validate if genreId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(genreId)) {
+      return res.status(400).json({ error: "Invalid genre ID format" });
+    }
+
+    const genre = await Genre.findById(genreId);
+    if (!genre) {
+      return res.status(404).json({ error: "Genre not found" });
+    }
+
+    // Check if genre is being used by movies
+    const movieCount = await Movie.countDocuments({ genres: genreId });
+    if (movieCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete genre. It is used by ${movieCount} movie(s)`,
+      });
+    }
+
+    await Genre.findByIdAndDelete(genreId);
+
+    res.json({
+      success: true,
+      message: "Genre deleted successfully",
+      genre,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function handleCountries(req, res, next) {
   try {
     const countries = await Country.find().sort({ name: 1 });
@@ -318,22 +496,23 @@ async function handleUploadNewMovie(req, res, next) {
 
     const schema = Joi.object({
       name: Joi.string().trim().required(),
-      origin_name: Joi.string().trim(),
+      origin_name: Joi.string().trim().allow(""),
       slug: Joi.string().trim().required(),
-      genres: Joi.array().items(Joi.string()).min(1).required(),
-      description: Joi.string().trim(),
-      content: Joi.string().trim(),
+      genres: Joi.array().items(Joi.string()).min(1),
+      description: Joi.string().trim().allow(""),
+      content: Joi.string().trim().allow(""),
       status: Joi.string().valid("ongoing", "completed").default("ongoing"),
       year: Joi.number().integer().min(1970),
-      time: Joi.string(),
+      time: Joi.string().allow(""),
       duration: Joi.number().integer(),
-      poster: Joi.string().uri(),
-      poster_url: Joi.string().uri(),
-      banner: Joi.string().uri(),
-      thumb_url: Joi.string().uri(),
-      quality: Joi.string(),
-      lang: Joi.string(),
-      trailer: Joi.string().uri(),
+      poster: Joi.string().uri().allow(""),
+      poster_url: Joi.string().uri().allow(""),
+      banner: Joi.string().uri().allow(""),
+      thumb_url: Joi.string().uri().allow(""),
+      quality: Joi.string().allow(""),
+      lang: Joi.string().allow(""),
+      trailer: Joi.string().uri().allow(""),
+      linkUrl: Joi.string().uri().allow(""),
       actor: Joi.array().items(Joi.string()),
       director: Joi.array().items(Joi.string()),
       cast: Joi.array().items(Joi.string()),
@@ -397,8 +576,14 @@ async function handleUploadNewMovie(req, res, next) {
 
 async function handleUploadEpisode(req, res, next) {
   try {
+    const { movieId } = req.params;
+
+    // Validate if movieId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(movieId)) {
+      return res.status(400).json({ error: "Invalid movie ID format" });
+    }
+
     const schema = Joi.object({
-      movieSlug: Joi.string().trim().required(),
       episodeNumber: Joi.number().integer().min(1).required(),
       title: Joi.string().trim(),
       description: Joi.string().trim(),
@@ -411,18 +596,18 @@ async function handleUploadEpisode(req, res, next) {
 
     const episodeData = await schema.validateAsync(req.body);
 
-    // Tìm phim theo slug
-    const movie = await Movie.findOne({ slug: episodeData.movieSlug });
+    // Find movie by ID
+    const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({ error: "Movie not found" });
     }
 
-    // Khởi tạo episodes array nếu chưa có
+    // Initialize episodes array if not exists
     if (!movie.episodes) {
       movie.episodes = [];
     }
 
-    // Kiểm tra tập phim đã tồn tại
+    // Check if episode already exists
     const episodeExists = movie.episodes.some(
       (ep) => ep.episodeNumber === episodeData.episodeNumber
     );
@@ -433,7 +618,7 @@ async function handleUploadEpisode(req, res, next) {
       });
     }
 
-    // Thêm tập phim mới
+    // Add new episode
     movie.episodes.push({
       episodeNumber: episodeData.episodeNumber,
       title: episodeData.title || `Episode ${episodeData.episodeNumber}`,
@@ -446,7 +631,7 @@ async function handleUploadEpisode(req, res, next) {
       createdAt: new Date(),
     });
 
-    // Cập nhật episode_current và episode_total
+    // Update episode_current and episode_total
     movie.episode_current = `${movie.episodes.length}`;
     movie.episode_total = `${movie.episodes.length}`;
     movie.updatedAt = new Date();
@@ -468,8 +653,14 @@ async function handleUploadEpisode(req, res, next) {
 
 async function handleUploadMultipleEpisodes(req, res, next) {
   try {
+    const { movieId } = req.params;
+
+    // Validate if movieId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(movieId)) {
+      return res.status(400).json({ error: "Invalid movie ID format" });
+    }
+
     const schema = Joi.object({
-      movieSlug: Joi.string().trim().required(),
       episodes: Joi.array()
         .items(
           Joi.object({
@@ -488,13 +679,13 @@ async function handleUploadMultipleEpisodes(req, res, next) {
 
     const uploadData = await schema.validateAsync(req.body);
 
-    // Tìm phim theo slug
-    const movie = await Movie.findOne({ slug: uploadData.movieSlug });
+    // Find movie by ID
+    const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({ error: "Movie not found" });
     }
 
-    // Khởi tạo episodes array nếu chưa có
+    // Initialize episodes array if not exists
     if (!movie.episodes) {
       movie.episodes = [];
     }
@@ -503,7 +694,7 @@ async function handleUploadMultipleEpisodes(req, res, next) {
     const failedEpisodes = [];
 
     for (const episodeData of uploadData.episodes) {
-      // Kiểm tra tập phim đã tồn tại
+      // Check if episode already exists
       const episodeExists = movie.episodes.some(
         (ep) => ep.episodeNumber === episodeData.episodeNumber
       );
@@ -516,7 +707,7 @@ async function handleUploadMultipleEpisodes(req, res, next) {
         continue;
       }
 
-      // Thêm tập phim mới
+      // Add new episode
       const newEpisode = {
         episodeNumber: episodeData.episodeNumber,
         title: episodeData.title || `Episode ${episodeData.episodeNumber}`,
@@ -534,7 +725,7 @@ async function handleUploadMultipleEpisodes(req, res, next) {
     }
 
     if (addedEpisodes.length > 0) {
-      // Cập nhật episode_current và episode_total
+      // Update episode_current and episode_total
       movie.episode_current = `${movie.episodes.length}`;
       movie.episode_total = `${movie.episodes.length}`;
       movie.updatedAt = new Date();
@@ -568,22 +759,23 @@ async function handleUploadNewMovieWithVideo(req, res, next) {
     // Lấy thông tin phim
     const movieSchema = Joi.object({
       name: Joi.string().trim().required(),
-      origin_name: Joi.string().trim(),
+      origin_name: Joi.string().trim().allow(""),
       slug: Joi.string().trim().required(),
-      genres: Joi.array().items(Joi.string()).min(1).required(),
-      description: Joi.string().trim(),
-      content: Joi.string().trim(),
+      genres: Joi.array().items(Joi.string()).min(1),
+      description: Joi.string().trim().allow(""),
+      content: Joi.string().trim().allow(""),
       status: Joi.string().valid("ongoing", "completed").default("ongoing"),
       year: Joi.number().integer().min(1970),
-      time: Joi.string(),
+      time: Joi.string().allow(""),
       duration: Joi.number().integer(),
-      poster: Joi.string().uri(),
-      poster_url: Joi.string().uri(),
-      banner: Joi.string().uri(),
-      thumb_url: Joi.string().uri(),
-      quality: Joi.string(),
-      lang: Joi.string(),
-      trailer: Joi.string().uri(),
+      poster: Joi.string().uri().allow(""),
+      poster_url: Joi.string().uri().allow(""),
+      banner: Joi.string().uri().allow(""),
+      thumb_url: Joi.string().uri().allow(""),
+      quality: Joi.string().allow(""),
+      lang: Joi.string().allow(""),
+      trailer: Joi.string().uri().allow(""),
+      linkUrl: Joi.string().uri().allow(""),
       actor: Joi.array().items(Joi.string()),
       director: Joi.array().items(Joi.string()),
       cast: Joi.array().items(Joi.string()),
@@ -731,8 +923,14 @@ async function handleUploadNewMovieWithVideo(req, res, next) {
  */
 async function handleUploadEpisodeWithVideo(req, res, next) {
   try {
+    const { movieId } = req.params;
+
+    // Validate if movieId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(movieId)) {
+      return res.status(400).json({ error: "Invalid movie ID format" });
+    }
+
     const episodeSchema = Joi.object({
-      movieSlug: Joi.string().trim().required(),
       episodeNumber: Joi.number().integer().min(1).required(),
       title: Joi.string().trim(),
       description: Joi.string().trim(),
@@ -742,23 +940,23 @@ async function handleUploadEpisodeWithVideo(req, res, next) {
 
     const episodeData = await episodeSchema.validateAsync(req.body);
 
-    // Kiểm tra file video
+    // Check video file
     if (!req.files || !req.files.video) {
       return res.status(400).json({ error: "Video file is required" });
     }
 
-    // Tìm phim theo slug
-    const movie = await Movie.findOne({ slug: episodeData.movieSlug });
+    // Find movie by ID
+    const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({ error: "Movie not found" });
     }
 
-    // Khởi tạo episodes array nếu chưa có
+    // Initialize episodes array if not exists
     if (!movie.episodes) {
       movie.episodes = [];
     }
 
-    // Kiểm tra tập phim đã tồn tại
+    // Check if episode already exists
     const episodeExists = movie.episodes.some(
       (ep) => ep.episodeNumber === episodeData.episodeNumber
     );
@@ -772,11 +970,11 @@ async function handleUploadEpisodeWithVideo(req, res, next) {
     const videoFile = req.files.video;
     const videoPath = path.join(uploadDir, videoFile.name);
 
-    // Lưu file tạm thời
+    // Save temporary file
     await videoFile.mv(videoPath);
 
     try {
-      // Upload video lên Cloudinary
+      // Upload video to Cloudinary
       const uploadResult = await uploadVideo(videoPath);
 
       if (!uploadResult.success) {
@@ -784,7 +982,7 @@ async function handleUploadEpisodeWithVideo(req, res, next) {
         return res.status(400).json({ error: uploadResult.error });
       }
 
-      // Upload thumbnail nếu có
+      // Upload thumbnail if exists
       let thumbnailUrl = undefined;
       if (req.files && req.files.thumbnail) {
         const thumbPath = path.join(uploadDir, req.files.thumbnail.name);
@@ -797,7 +995,7 @@ async function handleUploadEpisodeWithVideo(req, res, next) {
         }
       }
 
-      // Thêm tập phim mới
+      // Add new episode
       const newEpisode = {
         episodeNumber: episodeData.episodeNumber,
         title: episodeData.title || `Episode ${episodeData.episodeNumber}`,
@@ -812,14 +1010,14 @@ async function handleUploadEpisodeWithVideo(req, res, next) {
 
       movie.episodes.push(newEpisode);
 
-      // Cập nhật episode_current và episode_total
+      // Update episode_current and episode_total
       movie.episode_current = `${movie.episodes.length}`;
       movie.episode_total = `${movie.episodes.length}`;
       movie.updatedAt = new Date();
 
       await movie.save();
 
-      // Xóa file tạm thời
+      // Delete temporary file
       fs.unlinkSync(videoPath);
 
       res.status(201).json({
@@ -847,20 +1045,26 @@ async function handleUploadEpisodeWithVideo(req, res, next) {
  */
 async function handleUploadNewPosterImage(req, res, next) {
   try {
+    const { movieId } = req.params;
+
+    // Validate if movieId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(movieId)) {
+      return res.status(400).json({ error: "Invalid movie ID format" });
+    }
+
     const imageSchema = Joi.object({
-      movieSlug: Joi.string().trim().required(),
       imageType: Joi.string().valid("poster", "thumbnail").required(),
     });
 
     const imageData = await imageSchema.validateAsync(req.body);
 
-    // Kiểm tra file image
+    // Check image file
     if (!req.files || !req.files.image) {
       return res.status(400).json({ error: "Image file is required" });
     }
 
-    // Tìm phim theo slug
-    const movie = await Movie.findOne({ slug: imageData.movieSlug });
+    // Find movie by ID
+    const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({ error: "Movie not found" });
     }
@@ -868,11 +1072,11 @@ async function handleUploadNewPosterImage(req, res, next) {
     const imageFile = req.files.image;
     const imagePath = path.join(uploadDir, imageFile.name);
 
-    // Lưu file tạm thời
+    // Save temporary file
     await imageFile.mv(imagePath);
 
     try {
-      // Upload image lên Cloudinary
+      // Upload image to Cloudinary
       const uploadResult = await uploadImage(imagePath);
 
       if (!uploadResult.success) {
@@ -880,7 +1084,7 @@ async function handleUploadNewPosterImage(req, res, next) {
         return res.status(400).json({ error: uploadResult.error });
       }
 
-      // Cập nhật poster hoặc thumbnail
+      // Update poster or thumbnail
       if (imageData.imageType === "poster") {
         movie.poster_url = uploadResult.url;
       } else {
@@ -890,7 +1094,7 @@ async function handleUploadNewPosterImage(req, res, next) {
       movie.updatedAt = new Date();
       await movie.save();
 
-      // Xóa file tạm thời
+      // Delete temporary file
       fs.unlinkSync(imagePath);
 
       res.status(200).json({
@@ -899,7 +1103,7 @@ async function handleUploadNewPosterImage(req, res, next) {
         imageUrl: uploadResult.url,
       });
     } catch (uploadError) {
-      // Xóa file tạm thời nếu lỗi
+      // Delete temporary file if error
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
@@ -1053,7 +1257,12 @@ async function handleUploadVideoFile(req, res, next) {
  */
 async function handleUpdateMovie(req, res, next) {
   try {
-    const { slug } = req.params;
+    const { movieId } = req.params;
+
+    // Validate if movieId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(movieId)) {
+      return res.status(400).json({ error: "Invalid movie ID format" });
+    }
 
     // Lấy danh sách tất cả genres
     const allGenres = await Genre.find().select("_id slug name");
@@ -1061,22 +1270,23 @@ async function handleUpdateMovie(req, res, next) {
 
     const schema = Joi.object({
       name: Joi.string().trim(),
-      origin_name: Joi.string().trim(),
+      origin_name: Joi.string().trim().allow(""),
       slug: Joi.string().trim(),
       genres: Joi.array().items(Joi.string()).min(1),
-      description: Joi.string().trim(),
-      content: Joi.string().trim(),
+      description: Joi.string().trim().allow(""),
+      content: Joi.string().trim().allow(""),
       status: Joi.string().valid("ongoing", "completed"),
       year: Joi.number().integer().min(1970),
-      time: Joi.string(),
+      time: Joi.string().allow(""),
       duration: Joi.number().integer(),
-      poster: Joi.string().uri(),
-      poster_url: Joi.string().uri(),
-      banner: Joi.string().uri(),
-      thumb_url: Joi.string().uri(),
-      quality: Joi.string(),
-      lang: Joi.string(),
-      trailer: Joi.string().uri(),
+      poster: Joi.string().uri().allow(""),
+      poster_url: Joi.string().uri().allow(""),
+      banner: Joi.string().uri().allow(""),
+      thumb_url: Joi.string().uri().allow(""),
+      quality: Joi.string().allow(""),
+      lang: Joi.string().allow(""),
+      trailer: Joi.string().uri().allow(""),
+      linkUrl: Joi.string().uri().allow(""),
       actor: Joi.array().items(Joi.string()),
       director: Joi.array().items(Joi.string()),
       cast: Joi.array().items(Joi.string()),
@@ -1091,30 +1301,14 @@ async function handleUpdateMovie(req, res, next) {
 
     const movieData = await schema.validateAsync(req.body);
 
-    // If genres provided, validate them
-    if (movieData.genres) {
-      const invalidGenreIds = movieData.genres.filter(
-        (id) => !validGenreIds.includes(id)
-      );
-      if (invalidGenreIds.length > 0) {
-        return res.status(400).json({
-          error: `Invalid genre IDs: ${invalidGenreIds.join(", ")}`,
-        });
-      }
-
-      // Get genre details
-      const genreDetails = allGenres.filter((g) =>
-        movieData.genres.includes(g._id.toString())
-      );
-
-      movieData.category = genreDetails.map((g) => ({
-        name: g.name,
-        slug: g.slug,
-      }));
+    // Get current movie to check existing slug
+    const currentMovie = await Movie.findById(movieId);
+    if (!currentMovie) {
+      return res.status(404).json({ error: "Movie not found" });
     }
 
     // Check if new slug already exists (if slug is being updated)
-    if (movieData.slug && movieData.slug !== slug) {
+    if (movieData.slug && movieData.slug !== currentMovie.slug) {
       const existingMovie = await Movie.findOne({ slug: movieData.slug });
       if (existingMovie) {
         return res.status(400).json({ error: "Slug already exists" });
@@ -1122,15 +1316,11 @@ async function handleUpdateMovie(req, res, next) {
     }
 
     // Update movie
-    const updatedMovie = await Movie.findOneAndUpdate(
-      { slug },
+    const updatedMovie = await Movie.findByIdAndUpdate(
+      movieId,
       { ...movieData, updatedAt: new Date() },
       { new: true }
     );
-
-    if (!updatedMovie) {
-      return res.status(404).json({ error: "Movie not found" });
-    }
 
     res.json({
       success: true,
@@ -1146,20 +1336,25 @@ async function handleUpdateMovie(req, res, next) {
 }
 
 /**
- * DELETE /api/movies/:slug
+ * DELETE /api/movies/:movieId
  * Delete movie
  */
 async function handleDeleteMovie(req, res, next) {
   try {
-    const { slug } = req.params;
+    const { movieId } = req.params;
 
-    const movie = await Movie.findOne({ slug });
+    // Validate if movieId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(movieId)) {
+      return res.status(400).json({ error: "Invalid movie ID format" });
+    }
+
+    const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({ error: "Movie not found" });
     }
 
     // Delete from database
-    await Movie.deleteOne({ slug });
+    await Movie.findByIdAndDelete(movieId);
 
     res.json({
       success: true,
@@ -1171,14 +1366,54 @@ async function handleDeleteMovie(req, res, next) {
   }
 }
 
+async function handleTopMovies(req, res, next) {
+  try {
+    const schema = Joi.object({
+      limit: Joi.number().integer().min(1).max(100).default(10),
+      sortBy: Joi.string()
+        .valid("view", "rating", "year", "updatedAt")
+        .default("updatedAt"),
+    });
+
+    const { limit, sortBy } = await schema.validateAsync(req.query, {
+      convert: true,
+      allowUnknown: true,
+      stripUnknown: true,
+    });
+
+    const sortOptions = {
+      view: { view: -1 },
+      rating: { rating: -1 },
+      year: { year: -1 },
+      updatedAt: { updatedAt: -1 },
+    };
+
+    const movies = await Movie.find().sort(sortOptions[sortBy]).limit(limit);
+
+    res.json({
+      items: movies,
+      count: movies.length,
+      sortBy,
+      limit,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   handleLatestMovies,
+  handleTopMovies,
   handleMovieDetails,
   handleMovieByTmdb,
   handleCollections,
   handleSearch,
   handleGenres,
   handleGenreDetail,
+  handleMoviesByGenreId,
+  handleCreateGenre,
+  handleUpdateGenre,
+  handleDeleteGenre,
   handleCountries,
   handleCountryDetail,
   handleYearDetail,

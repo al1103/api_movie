@@ -34,6 +34,7 @@ const movieSchema = new mongoose.Schema(
     director: [String],
     cast: [String],
     trailer: String,
+    linkUrl: String,
     category: [Object],
     country: Object,
     tmdb: Object,

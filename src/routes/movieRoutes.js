@@ -6,12 +6,37 @@ const router = Router();
 
 // Public routes
 router.get("/movies/new", movieController.handleLatestMovies);
+router.get("/movies/top", movieController.handleTopMovies);
 router.get("/movies/tmdb/:type/:id", movieController.handleMovieByTmdb);
-router.get("/movies/:slug", movieController.handleMovieDetails);
+router.get("/movies/:movieIdOrSlug", movieController.handleMovieDetails);
 router.get("/collections", movieController.handleCollections);
 router.get("/search", movieController.handleSearch);
 router.get("/genres", movieController.handleGenres);
+router.get("/genres/:genreId/movies", movieController.handleMoviesByGenreId);
 router.get("/genres/:slug", movieController.handleGenreDetail);
+
+// Genre CRUD routes (Admin only)
+router.post(
+  "/genres",
+  authenticate,
+  authorize("admin"),
+  movieController.handleCreateGenre
+);
+
+router.put(
+  "/genres/:genreId",
+  authenticate,
+  authorize("admin"),
+  movieController.handleUpdateGenre
+);
+
+router.delete(
+  "/genres/:genreId",
+  authenticate,
+  authorize("admin"),
+  movieController.handleDeleteGenre
+);
+
 router.get("/countries", movieController.handleCountries);
 router.get("/countries/:slug", movieController.handleCountryDetail);
 router.get("/years/:year", movieController.handleYearDetail);
@@ -25,28 +50,28 @@ router.post(
 );
 
 router.put(
-  "/movies/:slug",
+  "/movies/:movieId",
   authenticate,
   authorize("admin"),
   movieController.handleUpdateMovie
 );
 
 router.delete(
-  "/movies/:slug",
+  "/movies/:movieId",
   authenticate,
   authorize("admin"),
   movieController.handleDeleteMovie
 );
 
 router.post(
-  "/movies/:movieSlug/episodes",
+  "/movies/:movieId/episodes",
   authenticate,
   authorize("admin"),
   movieController.handleUploadEpisode
 );
 
 router.post(
-  "/movies/:movieSlug/episodes/batch",
+  "/movies/:movieId/episodes/batch",
   authenticate,
   authorize("admin"),
   movieController.handleUploadMultipleEpisodes
@@ -61,20 +86,19 @@ router.post(
 );
 
 router.post(
-  "/movies/:movieSlug/episodes/upload",
+  "/movies/:movieId/episodes/upload",
   authenticate,
   authorize("admin"),
   movieController.handleUploadEpisodeWithVideo
 );
 
 router.post(
-  "/movies/:movieSlug/poster/upload",
+  "/movies/:movieId/poster/upload",
   authenticate,
   authorize("admin"),
   movieController.handleUploadNewPosterImage
 );
 
-// Public upload routes (Simple upload - no auth required for images/videos)
 router.post("/upload/image", movieController.handleUploadImage);
 
 router.post("/upload/video", movieController.handleUploadVideoFile);

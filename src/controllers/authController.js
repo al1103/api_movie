@@ -1,6 +1,6 @@
-const jwt = require('jsonwebtoken');
-const config = require('../config/env');
-const User = require('../models/User');
+const jwt = require("jsonwebtoken");
+const config = require("../config/env");
+const User = require("../models/User");
 
 /**
  * Tạo JWT token
@@ -25,14 +25,14 @@ const register = async (req, res) => {
     if (!username || !email || !password || !passwordConfirm) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all required fields',
+        message: "Please provide all required fields",
       });
     }
 
     if (password !== passwordConfirm) {
       return res.status(400).json({
         success: false,
-        message: 'Passwords do not match',
+        message: "Passwords do not match",
       });
     }
 
@@ -46,8 +46,8 @@ const register = async (req, res) => {
         success: false,
         message:
           existingUser.email === email
-            ? 'Email already in use'
-            : 'Username already taken',
+            ? "Email already in use"
+            : "Username already taken",
       });
     }
 
@@ -56,7 +56,7 @@ const register = async (req, res) => {
       username,
       email,
       password,
-      role: 'user', // Default role
+      role: "user", // Default role
     });
 
     await user.save();
@@ -66,14 +66,14 @@ const register = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: "User registered successfully",
       token,
       user: user.toJSON(),
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error during registration',
+      message: "Error during registration",
       error: error.message,
     });
   }
@@ -91,17 +91,17 @@ const login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide email and password',
+        message: "Please provide email and password",
       });
     }
 
     // Find user and select password field
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Email or password is incorrect',
+        message: "Email or password is incorrect",
       });
     }
 
@@ -109,7 +109,7 @@ const login = async (req, res) => {
     if (!user.isActive) {
       return res.status(401).json({
         success: false,
-        message: 'User account is inactive',
+        message: "User account is inactive",
       });
     }
 
@@ -119,7 +119,7 @@ const login = async (req, res) => {
     if (!isPasswordMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Email or password is incorrect',
+        message: "Email or password is incorrect",
       });
     }
 
@@ -128,14 +128,14 @@ const login = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'User logged in successfully',
+      message: "User logged in successfully",
       token,
       user: user.toJSON(),
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error during login',
+      message: "Error during login",
       error: error.message,
     });
   }
@@ -152,7 +152,7 @@ const getProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
@@ -163,7 +163,7 @@ const getProfile = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error retrieving profile',
+      message: "Error retrieving profile",
       error: error.message,
     });
   }
@@ -181,9 +181,9 @@ const updateProfile = async (req, res) => {
       req.userId,
       {
         $set: {
-          'profile.fullName': fullName,
-          'profile.avatar': avatar,
-          'profile.bio': bio,
+          "profile.fullName": fullName,
+          "profile.avatar": avatar,
+          "profile.bio": bio,
           updatedAt: new Date(),
         },
       },
@@ -193,19 +193,19 @@ const updateProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: "Profile updated successfully",
       user: user.toJSON(),
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error updating profile',
+      message: "Error updating profile",
       error: error.message,
     });
   }
@@ -219,12 +219,12 @@ const logout = async (req, res) => {
   try {
     return res.status(200).json({
       success: true,
-      message: 'User logged out successfully',
+      message: "User logged out successfully",
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error during logout',
+      message: "Error during logout",
       error: error.message,
     });
   }
@@ -236,7 +236,7 @@ const logout = async (req, res) => {
  */
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.find().select("-password");
 
     return res.status(200).json({
       success: true,
@@ -246,7 +246,7 @@ const getAllUsers = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error retrieving users',
+      message: "Error retrieving users",
       error: error.message,
     });
   }
@@ -261,11 +261,11 @@ const updateUserRole = async (req, res) => {
     const { userId } = req.params;
     const { role } = req.body;
 
-    const validRoles = ['user', 'admin', 'moderator'];
+    const validRoles = ["user", "admin", "moderator"];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid role. Allowed roles: ${validRoles.join(', ')}`,
+        message: `Invalid role. Allowed roles: ${validRoles.join(", ")}`,
       });
     }
 
@@ -278,19 +278,19 @@ const updateUserRole = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'User role updated successfully',
+      message: "User role updated successfully",
       user: user.toJSON(),
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error updating user role',
+      message: "Error updating user role",
       error: error.message,
     });
   }
@@ -314,19 +314,179 @@ const toggleUserStatus = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: `User account ${isActive ? 'activated' : 'deactivated'} successfully`,
+      message: `User account ${
+        isActive ? "activated" : "deactivated"
+      } successfully`,
       user: user.toJSON(),
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error updating user status',
+      message: "Error updating user status",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * POST /auth/favorites/:movieSlug
+ * Thêm phim vào danh sách yêu thích
+ */
+const addFavorite = async (req, res) => {
+  try {
+    const { movieSlug } = req.params;
+    const userId = req.userId;
+
+    // Check if movie exists
+    const Movie = require("../models/Movie");
+    const movie = await Movie.findOne({ slug: movieSlug });
+
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: "Movie not found",
+      });
+    }
+
+    // Check if already in favorites
+    const user = await User.findById(userId);
+    const isFavorited = user.favorites.some(
+      (fav) => fav.movieSlug === movieSlug
+    );
+
+    if (isFavorited) {
+      return res.status(400).json({
+        success: false,
+        message: "Movie already in favorites",
+      });
+    }
+
+    // Add to favorites
+    user.favorites.push({
+      movieId: movie._id,
+      movieSlug: movieSlug,
+      addedAt: new Date(),
+    });
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Movie added to favorites",
+      favorites: user.favorites,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error adding to favorites",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * DELETE /auth/favorites/:movieSlug
+ * Xóa phim khỏi danh sách yêu thích
+ */
+const removeFavorite = async (req, res) => {
+  try {
+    const { movieSlug } = req.params;
+    const userId = req.userId;
+
+    const user = await User.findById(userId);
+
+    // Check if in favorites
+    const isFavorited = user.favorites.some(
+      (fav) => fav.movieSlug === movieSlug
+    );
+
+    if (!isFavorited) {
+      return res.status(400).json({
+        success: false,
+        message: "Movie not in favorites",
+      });
+    }
+
+    // Remove from favorites
+    user.favorites = user.favorites.filter(
+      (fav) => fav.movieSlug !== movieSlug
+    );
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Movie removed from favorites",
+      favorites: user.favorites,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error removing from favorites",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * GET /auth/favorites
+ * Lấy danh sách yêu thích của người dùng
+ */
+const getFavorites = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findById(userId).populate("favorites.movieId");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: user.favorites.length,
+      favorites: user.favorites,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error retrieving favorites",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * GET /auth/favorites/:movieSlug
+ * Kiểm tra phim có trong yêu thích không
+ */
+const checkFavorite = async (req, res) => {
+  try {
+    const { movieSlug } = req.params;
+    const userId = req.userId;
+
+    const user = await User.findById(userId);
+    const isFavorited = user.favorites.some(
+      (fav) => fav.movieSlug === movieSlug
+    );
+
+    return res.status(200).json({
+      success: true,
+      isFavorited,
+      movieSlug,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error checking favorite status",
       error: error.message,
     });
   }
@@ -341,4 +501,8 @@ module.exports = {
   getAllUsers,
   updateUserRole,
   toggleUserStatus,
+  addFavorite,
+  removeFavorite,
+  getFavorites,
+  checkFavorite,
 };
