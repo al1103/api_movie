@@ -1315,6 +1315,30 @@ async function handleUpdateMovie(req, res, next) {
       }
     }
 
+    // Validate and process genres if provided
+    if (movieData.genres && movieData.genres.length > 0) {
+      // Validate genre IDs exist
+      const invalidGenreIds = movieData.genres.filter(
+        (id) => !validGenreIds.includes(id)
+      );
+      if (invalidGenreIds.length > 0) {
+        return res.status(400).json({
+          error: `Invalid genre IDs: ${invalidGenreIds.join(", ")}`,
+        });
+      }
+
+      // Get genre details
+      const genreDetails = allGenres.filter((g) =>
+        movieData.genres.includes(g._id.toString())
+      );
+
+      // Update category based on genres
+      movieData.category = genreDetails.map((g) => ({
+        name: g.name,
+        slug: g.slug,
+      }));
+    }
+
     // Update movie
     const updatedMovie = await Movie.findByIdAndUpdate(
       movieId,
